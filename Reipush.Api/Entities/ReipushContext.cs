@@ -15,10 +15,11 @@ namespace Reipush.Api.Entities
         {
         }
 
-        public virtual DbSet<Reipush.Api.Entities.User> User { get; set; }
-        public virtual DbSet<Reipush.Api.Entities.voUser> voUser { get; set; }
+        public virtual DbSet<Reipush.Api.Entities.User.User> User { get; set; }
+        public virtual DbSet<Reipush.Api.Entities.User.voUser> voUser { get; set; }
         public virtual DbSet<Reipush.Api.Entities.Util.Countries> Countries { get; set; }
         public virtual DbSet<Reipush.Api.Entities.Util.StateProvince> StateProvinces { get; set; }
-
+        public virtual DbSet<Reipush.Api.Entities.User.UserRefreshToken> UserRefreshTokens { get; set; }
+        public virtual DbSet<Reipush.Api.Entities.Property.voPropertyAddress> voPropertyAddress { get; set; }
     }
 }

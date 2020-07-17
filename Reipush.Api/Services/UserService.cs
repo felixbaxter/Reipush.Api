@@ -12,7 +12,9 @@ using Reipush.Api.ViewModels;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore.Storage;
 using System.Text;
-
+using Reipush.Api.Entities.User;
+using System.Security.Claims;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace Reipush.Api.Services
 {
@@ -26,24 +28,24 @@ namespace Reipush.Api.Services
             _reipushcontext = context;
         }
 
-        public async Task<List<User>> GetAllUsers()
-        {
-            var iUsers = await  _reipushcontext.User
-                                .FromSqlRaw("REIPUSH_GETUSERS")
-                                .ToArrayAsync();
+        //public async Task<List<User>> GetAllUsers()
+        //{
+        //    var iUsers = await  _reipushcontext.User
+        //                        .FromSqlRaw("REIPUSH_GETUSERS")
+        //                        .ToArrayAsync();
 
-            return iUsers.ToList();
-        }
-        public User GetUserById(viUserId iuser)
-        {
-            var rUser =  _reipushcontext.User
-                        .FromSqlRaw("REIPUSH_GETUSERBYID @UserId",
-                         new  SqlParameter("UserId", iuser.UserId))
-                        .AsEnumerable()
-                        .FirstOrDefault();
+        //    return iUsers.ToList();
+        //}
+        //public User GetUserById(viUserId iuser)
+        //{
+        //    var rUser =  _reipushcontext.User
+        //                .FromSqlRaw("REIPUSH_GETUSERBYID @UserId",
+        //                 new  SqlParameter("UserId", iuser.UserId))
+        //                .AsEnumerable()
+        //                .FirstOrDefault();
 
-            return rUser;
-        }
+        //    return rUser;
+        //}
 
         public User GetUserByEmail(string iemail)
         {
@@ -63,6 +65,49 @@ namespace Reipush.Api.Services
             }
             return rUser;
         }
+
+
+        public int AuthenticateUser(viEmailPwd iCred)
+        {
+            int result = 0;
+            try
+            {
+                // Let's get the current user SALT Key
+                User iuser = new User();
+                iuser.Email = iCred.Email;
+
+                var tUser = _reipushcontext.User
+                   .Where(u => u.Email == iCred.Email)
+                   .Select(u => new User(){
+                       PasswordHash = u.PasswordHash,
+                       PasswordSalt = u.PasswordSalt
+                   }).ToArray();
+                  
+
+                //  Convert the Current Password to Hash via the Salt key
+                if (iCred.Password != ""){
+                    iuser.PasswordSalt = CreateSalt(5);
+                    iuser.PasswordHash = CreatePasswordHash(iCred.Password, tUser[0].PasswordSalt);
+                }
+
+                // Compare the two Hashed Passwords
+                if (iuser.PasswordHash.Equals(tUser[0].PasswordHash))
+                {
+                    result = tUser[0].UserId;
+                }
+
+                return result;
+
+
+            }
+            catch (Exception e)
+            {
+
+            }
+            return result;
+        }
+
+
 
         public voUser GetUserCombineNameById(viUserId iuser)
         {
@@ -94,6 +139,81 @@ namespace Reipush.Api.Services
             return vUser;
         }
 
+        public string GenerateUserToken(User user, string tokenSecret) {
+          
+            var result =  Helper.GenerateToken(user.UserId, user.Email, false, tokenSecret);
+            return result;
+        }
+
+        public  string GenerateRefreshToken(int userID)
+        {
+            var randomNumber = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomNumber);
+                var sReturn = Convert.ToBase64String(randomNumber);
+                //store refreshtoken
+                try
+                {
+                    var query = _reipushcontext.UserRefreshTokens.FirstOrDefault(a => a.UserId == userID);
+                    if (query != null && query.UserId == userID)
+                    {
+                        query.RefreshToken = sReturn;
+                        query.ExpiresOn = DateTime.Now.AddDays(30);
+                        _reipushcontext.UserRefreshTokens.Update(query);
+                    }
+                    else
+                    {
+                        query = new UserRefreshToken()
+                        {
+                            UserId = userID,
+                            RefreshToken = sReturn,
+                            CreatedOn = DateTime.Now,
+                            ExpiresOn = DateTime.Now.AddDays(30)
+                        };
+                        _reipushcontext.UserRefreshTokens.Add(query);
+                    }
+                    _reipushcontext.SaveChanges();
+                }
+                catch (Exception ex)
+                {
+                    var s = ex.Message;
+                    sReturn = "";
+                }
+                return sReturn;
+            }
+        }
+
+
+        public RefreshAccessToken GenerateRefreshTokenFromPrincipal(string token, string secret)
+        {
+            var principal = Helper.GetPrincipalFromExpiredToken(token, secret);
+            var sid = principal.Claims.Where(c => c.Type == ClaimTypes.Sid).Select(c => c.Value).SingleOrDefault();
+            var newJwtToken = Helper.GenerateToken(principal.Claims, secret);
+
+            var newRfreshToken = GenerateRefreshToken(Convert.ToInt32(sid));
+
+            return new RefreshAccessToken
+            {
+                token = newJwtToken,
+                refreshToken = newRfreshToken
+            };
+                 
+        }
+
+        public string GetSavedRefreshToken(string token, string seceret)
+        {
+            var principal = Helper.GetPrincipalFromExpiredToken(token, seceret);
+            var sid = principal.Claims.Where(c => c.Type == ClaimTypes.Sid).Select(c => c.Value).SingleOrDefault();
+            return  GetRefreshToken(Convert.ToInt32(sid));
+        }
+
+        public string GetRefreshToken(int userID)
+        {
+            var query = _reipushcontext.UserRefreshTokens.FirstOrDefault(a => a.UserId == userID);
+            if (query == null) return "";
+            return query.RefreshToken;
+        }
 
         public User CreateAccount(viEmailPwd iCred)
         {
@@ -118,7 +238,7 @@ namespace Reipush.Api.Services
                         
 
 
-            return iuser;
+            return ruserId;
         }
 
 
@@ -144,6 +264,9 @@ namespace Reipush.Api.Services
 
             return iUser;
         }
+
+
+
         ////////////////////////////////////////////////////////////////////////////////
         //                                   PRIVATE ROUTINES                         //
         /// ////////////////////////////////////////////////////////////////////////////

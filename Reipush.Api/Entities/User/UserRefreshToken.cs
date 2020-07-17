@@ -7,14 +7,13 @@ using System.Threading.Tasks;
 
 namespace Reipush.Api.Entities.User
 {
-    [Table("voUsers")]
-    public class voUser
+    [Table("UserRefreshTokens")]
+    public class UserRefreshToken
     {
         [Key]
         public int UserId { get; set; }
-        public string Email { get; set; }
-        public string Name { get; set; }
-        public string MobileNumber { get; set; }
-        public Int16 UserType { get; set; }
+        public string RefreshToken { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public DateTime ExpiresOn { get; set; }
     }
 }

@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Reipush.Api.Entities
+namespace Reipush.Api.Entities.User
 {
     [Table("Users")]
     public class User
